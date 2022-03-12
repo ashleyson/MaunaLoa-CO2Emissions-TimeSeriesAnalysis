@@ -1,0 +1,171 @@
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(stats)
+require(MASS)
+require(tseries)
+require(forecast)
+require(astsa)
+require(data.table)
+```
+```{r, eval = F}
+co2emission <- read.csv("monthly_in_situ_co2_mlo.csv", 
+                        skip =59, header = F)
+co2 <- co2emission$V5
+co2 <- ifelse(co2 == -99.99, NA, co2)
+co2ts <- as.ts(co2, start=c(1958,3), frequency=12)
+co2ts <- co2ts[0:747]
+plot.ts(co2ts, ylab = "Original Atmospheric Carbon Dioxide (PPM)", 
+        main = "Atmospheric Carbon Dioxide vs. Time")
+plot.ts(co2ts, ylab = "Carbon Dioxide in parts per million",
+        main = "Time Series of Carbon Dioxide Emissions")
+abline(h=mean(co2ts, na.rm = T), col = "blue")
+nt = length(co2ts)
+fit<- lm(co2ts~as.numeric(1:nt)); abline(fit, col="red")
+
+# TRANSFORMATION
+t <- as.numeric(1:length(co2ts))
+fit <- lm(co2ts~t)
+bctransform <- boxcox(co2ts~t, lambda = seq(0,1.5))
+transformation = bctransform$x[which.max(bctransform$y)]
+transformation
+
+co2log <- log(co2ts)
+plot.ts(co2log, ylab = "Carbon Dioxide in parts per million", 
+        main = "CO2 log transformation")
+
+co2log1 <- diff(co2log,1)
+plot.ts(co2log1, ylab = "First difference of log transformed Carbon Dioxide in ppm",
+        main = "CO2 log transformation with first lag differenced")
+varco2log <- var(co2log, na.rm = T)
+show(varco2log)
+varco2log1 <- var(co2log1, na.rm =T)
+show(varco2log1)
+vardiff<-varco2log-varco2log1
+show(vardiff)
+
+co2log12 <- diff(co2log1,12)
+plot.ts(co2log12, ylab = "Second difference of log transformed Carbon Dioxide ppm", 
+        main = "Second difference of log transformed of Carbon Dioxide Emissions")
+abline(h=mean(co2log12, na.rm = T), col = "blue")
+varco2log12 <- var(co2log12, na.rm =T)
+show(varco2log12)
+vardiff2<-varco2log1-varco2log12
+show(vardiff2)
+
+# ACF / PACF
+acf2(co2log12, max.lag = 60, plot = TRUE, main = "ACF and PACF for CO2 emissions after transformation", na.action = na.pass)
+kpss.test(co2log12)
+
+# MODEL FITTING
+model0 <- arima(co2log, order = c(0,1,1), seasonal = list(order = c(0,1,1), period = 12))
+model1 <- Arima(co2log, order = c(3,1,0), seasonal = list(order = c(0,1,1), period = 12))
+model2 <- Arima(co2log, order = c(3,1,1), seasonal = list(order = c(0,1,1), period = 12))
+model3 <- Arima(co2log, order = c(0,1,1), seasonal = list(order = c(1,1,1), period = 12))
+
+show(model0)
+show(model1)
+show(model2)
+show(model3)
+
+polyroot(c(1,-0.8834)) #SMA for model 0
+polyroot(c(1, -0.8840)) #SMA for model 1
+polyroot(c(1, -0.8841)) #SMA for model 2
+polyroot(c(1, 0.0205, -0.8877)) #SAR and SMA for model 3
+polyroot(c(1, 0.0184, -0.8877)) #SAR and SMA for model 4
+polyroot(c(1,-0.8845)) #SMA for model 5
+
+# MODEL ANALYSIS
+# MODEL 0
+res00<-residuals(model0)
+res0<-res00[21:747]
+plot(res00, main="Model 0 Residuals", 
+     ylab = "Residuals")
+plot(res00, main="Model 0 Residuals", 
+     ylab = "Residuals", xlim = c(0,20))
+
+Box.test(res0, lag = 28, type = "Box-Pierce", fitdf=2)
+Box.test(res0, lag = 28, type = "Ljung-Box", fitdf=2)
+Box.test((res0)^2, lag=28, type="Ljung-Box")
+shapiro.test(res0)
+
+hist(res0, xlim = c(-0.005,0.005), 
+     main = "Model 0 Histogram", breaks = 60)
+qqnorm(res0,  main = "Q-Q plot of Model 0 Residuals")
+qqline(res0)
+acf2(res0, na.action=na.pass,main = "ACF/PACF of Model 0 Residuals")
+
+# MODEL 1
+res01<-residuals(model1)
+res1<-res01[21:747]
+plot(res01, main="Model 1 Residuals", 
+     ylab = "Residuals")
+plot(res01, main="Model 1 Residuals", 
+     ylab = "Residuals", xlim = c(0,20))
+
+Box.test(res1, lag = 28, type = "Box-Pierce", fitdf=4)
+Box.test(res1, lag = 28, type = "Ljung-Box", fitdf=4)
+Box.test((res1)^2, lag=28, type="Ljung-Box")
+shapiro.test(res1) 
+
+hist(res1, xlim = c(-0.005,0.005), 
+     main = "Model 1 Histogram", breaks = 60)
+qqnorm(res1,  main = "Q-Q plot of Model 1 Residuals")
+qqline(res1)
+acf2(res1, na.action=na.pass,main = "ACF/PACF of Model 1 Residuals")
+
+# MODEL 2
+res02<-residuals(model2)
+res2<-res02[21:747]
+plot(res02, main="Model 2 Residuals", 
+     ylab = "Residuals")
+plot(res02, main="Model 2 Residuals", 
+     ylab = "Residuals", xlim = c(0,20))
+
+Box.test(res2, lag = 28, type = "Box-Pierce", fitdf=5)
+Box.test(res2, lag = 28, type = "Ljung-Box", fitdf=5)
+Box.test((res2)^2, lag=28, type="Ljung-Box")
+shapiro.test(res2)
+
+
+hist(res2, xlim = c(-0.005,0.005), 
+     main = "Model 2 Histogram", breaks = 60)
+qqnorm(res2,  main = "Q-Q plot of Model 2 Residuals")
+qqline(res2)
+acf2(res2, na.action=na.pass,main = "ACF/PACF of Model 2 Residuals")
+
+# MODEL 3
+res03<-residuals(model3)
+res3<-res03[21:747]
+plot(res03, main="Model 3 Residuals", 
+     ylab = "Residuals")
+plot(res03, main="Model 3 Residuals", 
+     ylab = "Residuals", xlim = c(0,20))
+
+Box.test(res3, lag = 28, type = "Box-Pierce", fitdf=3)
+Box.test(res3, lag = 28, type = "Ljung-Box", fitdf=3)
+Box.test((res3)^2, lag=28, type="Ljung-Box")
+shapiro.test(res3) 
+hist(res3, xlim = c(-0.005,0.005), 
+     main = "Model 3 Histogram", breaks = 60)
+qqnorm(res3,  main = "Q-Q plot of Model 3 Residuals")
+qqline(res3)
+acf2(res3, na.action=na.pass,main = "ACF/PACF of Model 3 Residuals")
+
+#FORECAST
+prediction <- predict(model1, n.ahead = 10)
+pred.orig <- exp(prediction$pred)
+stderror <- exp(prediction$pred)*prediction$pred*prediction$se
+bound = (length(co2ts)+1):(length(co2ts)+10)
+predval <- co2[748:757]
+upperbound = pred.orig+1.96*stderror
+lowerbound = pred.orig-1.96*stderror
+
+plot.ts(co2, xlim = c(680,length(co2ts)+10), ylim = c(360,430),
+        ylab = "Atmospheric CO2 Emissions", 
+        main = "Forecast values vs Original values of Atmospheric CO2 Emissions")
+points(bound,pred.orig, col="blue")
+lines(bound,predval, col = "red")
+lines(bound, upperbound,lty=2, col="green") 
+lines(bound,lowerbound,lty=2, col="green")
+```
